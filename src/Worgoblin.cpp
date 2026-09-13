@@ -3,11 +3,14 @@
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "SpellScript.h"
+#include "SpellAuraEffects.h"
+#include "SpellMgr.h"
 #include "Config.h"
 
 enum Spells
 {
     BEST_DEALS_ANYWHERE = 69044,
+    SPELL_MAGHAR_COURAGEOUS_COMPANION = 110015,
 };
 
 enum WorgenRiding
@@ -136,9 +139,46 @@ private:
     }
 };
 
+// 110015 - Courageous Companion
+//
+// Effect_1 = Apply Aura / Mod Threat (self, all schools) doubles the
+// caster's own outgoing threat generation - same mechanism real Frost/
+// Blood/Unholy Presence use (SpellAuraDefines SPELL_AURA_MOD_THREAT). This
+// runs first in ThreatManager::AddThreat's pipeline. Effect_2 =
+// SPELL_EFFECT_REDIRECT_THREAT (targeted at the caster's pet) then reroutes
+// 100% of that already-doubled amount to the pet - the core's
+// ThreatManager::RegisterRedirectThreat keeps this active for as long as
+// the spell stays registered, with no separate timer of its own. Effect_3
+// is a plain Dummy aura with a permanent duration - it's the visible toggle
+// buff the player right-clicks off, and its only job is to give us
+// something to hook so we can turn the redirect off again. Nothing in the
+// base engine ever calls UnregisterRedirectThreat automatically (real
+// Misdirection only turns off because Blizzard's own
+// spell_hun_misdirection_proc script does this same thing) - without this
+// hook, the redirect would stay on forever once cast, even after the buff
+// is cancelled.
+class spell_maghar_courageous_companion : public AuraScript
+{
+    PrepareAuraScript(spell_maghar_courageous_companion);
+
+    void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        GetTarget()->GetThreatMgr().UnregisterRedirectThreat(SPELL_MAGHAR_COURAGEOUS_COMPANION);
+    }
+
+    void Register() override
+    {
+        // EFFECT_2 = the spell's 3rd effect slot (Effect_3 in spell_dbc), the
+        // Dummy aura. If the effect layout changes again, bump this to match
+        // whichever slot ends up holding the Dummy aura.
+        AfterEffectRemove += AuraEffectRemoveFn(spell_maghar_courageous_companion::OnRemove, EFFECT_2, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
 void Add_Worgoblin()
 {
     new worgoblin();
     RegisterSpellScript(spell_rocket_barrage);
+    RegisterSpellScript(spell_maghar_courageous_companion);
     new player_worgen_running_wild();
 }

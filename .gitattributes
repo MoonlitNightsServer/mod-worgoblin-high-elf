@@ -103,3 +103,9 @@ TODO         text
 ## EXECUTABLES
 *.exe binary
 *.pyc binary
+
+# Moonlit Nights: WoW binary game data must never be EOL-normalized.
+# These already resolve to -text via git's content heuristic; this makes it
+# explicit and independent of that heuristic. core.autocrlf is true here.
+*.dbc binary
+*.mpq binary
